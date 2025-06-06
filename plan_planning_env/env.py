@@ -6,7 +6,9 @@
 # Description:
 import gym
 import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
+from matplotlib.patches import Polygon as MplPolygon
+from shapely.geometry import Polygon, LineString, Point
+import numpy as np
 
 # 可用的env
 # __all__ = [ "PathPlanningWithLidar" ]
@@ -15,41 +17,88 @@ class Map:
     def __init__(self,
                  obstacles_vertices,
                  map_size = [ [-10.0, -10.0], [10.0, 10.0] ],
-                 start_pos = [0,-9],
-                 end_pos = [2.5, 9]):
+                 start_pos = [-10.0, -10.0],
+                 end_pos = [10.0, 10.0]):
 
         self.size = map_size
         self.start_pos = start_pos
         self.end_pos = end_pos
+
         self.obstacles_vertices = obstacles_vertices
 
 class Lidar:
-    def __init__(self, position=(0, 0), angle=0, num_rays=16, max_range=10.0, fov=360):
+    def __init__(self, Map, max_range=20.0, scan_angle=128.0, num_angle=128):
+        """ Args:
+                max_range (float): 最大扫描距离(m).
+                scan_angle (float): 最大扫描角度(deg).
+                num_angle (int): 扫描角度个数.
         """
-        2D激光雷达模拟器
+        self.max_range = float(max_range)
+        self.scan_angle = float(scan_angle)
+        self.num_angle = int(num_angle)
+        self.x, self.y = Map.start_pos
+        self.yaw = 0.0
 
-        参数:
-            position: 雷达位置 (x, y)
-            angle: 雷达初始朝向 (弧度)
-            num_rays: 射线数量
-            max_range: 最大探测距离
-            fov: 视场角 (度)
+        self.__ray_angles = np.deg2rad(np.linspace(-self.scan_angle/2, self.scan_angle/2, self.num_angle))
+        self.__poly_obstacles = []
+        for obstacle_vertices in Map.obstacles_vertices:
+            self.__poly_obstacles.append(Polygon(obstacle_vertices))
+
+
+    def scan(self):
+        """ Args:
+                self.x (float): x坐标(m).
+                self.y (float): y坐标(m).
+                self.yaw (float): 偏航角(rad).
+
         """
-        self.position = np.array(position, dtype=np.float32)
-        self.angle = angle
-        self.num_rays = num_rays
-        self.max_range = max_range
-        self.fov = np.deg2rad(fov)
+        # 激光与障碍物交点
+        scan_points = []
+        scan_distances = []
 
-        # 计算射线角度
-        self.ray_angles = np.linspace(-self.fov/2, self.fov/2, num_rays) + angle
-        self.ray_directions = np.column_stack([
-            np.cos(self.ray_angles),
-            np.sin(self.ray_angles)
-        ])
+        # 碰撞
+        for poly_obstacle in self.__poly_obstacles:
+            if poly_obstacle.contains(Point(self.x,self.y)):
+                print(self.x, self.y)
+                return scan_distances, scan_points
 
-        # 存储上一次的扫描结果
-        self.last_scan = np.full(num_rays, max_range)
+        # 雷达测距
+        for i, angle in enumerate(self.__ray_angles):
+            line = LineString([
+                (self.x, self.y),
+                (self.x + self.max_range * np.cos(self.yaw + angle), self.y + self.max_range * np.sin(self.yaw + angle))
+            ])
+            point, distance = self.__compute_intersection(line)
+            if point is not None:
+                scan_distances.append(distance)
+                scan_points.append(point)
+
+        return scan_distances, scan_points
+
+    # 计算雷达射线和障碍物的交点和距离
+    def __compute_intersection(self, ray_line: LineString):
+        point = None
+        distance = self.max_range
+
+        # TODO: O(n)
+        for poly_obstacle in self.__poly_obstacles:
+            intersections = poly_obstacle.intersection(ray_line)
+            if intersections.is_empty:
+                continue
+            if intersections.geom_type in {'MultiPoint', 'MultiLineString', 'GeometryCollection'}:
+                multi_geom = list(intersections.geoms)
+            else:
+                multi_geom = [intersections]
+
+            for single_geom in multi_geom:
+                for p in single_geom.coords:
+                    d = np.linalg.norm(np.array(p) - ray_line.coords[0])
+                    if d < distance:
+                        distance = d
+                        point = list(p)
+
+        return point, distance
+
 
 # gym env
 class PathPlanningWithLidar(gym.Env):
@@ -59,8 +108,10 @@ class PathPlanningWithLidar(gym.Env):
 
     def __init__(self, MAP):
         super(PathPlanningWithLidar, self).__init__()
-        self.map = MAP
 
+        self.map = MAP
+        self.sensor = Lidar(self.map)
+        print(f"distance point:{self.sensor.scan()}")
         # used for render function
         self.fig = None
 
@@ -80,7 +131,7 @@ class PathPlanningWithLidar(gym.Env):
             # draw obstacles
             for obstacle_vertices in self.map.obstacles_vertices:
                 self.ax.add_patch(
-                    Polygon(
+                    MplPolygon(
                         obstacle_vertices,
                         closed = True,
                         fill = True,
