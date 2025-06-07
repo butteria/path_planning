@@ -70,14 +70,8 @@ class MapEditor:
 
             self.select_shape(event)
         elif event.button == 1:  # Left click
-            # if self.selected_shape:
-            #     # Start dragging selected shape
-            #     self.drag_start = (event.xdata, event.ydata)
             if not self.drawing:
-            #     # Start new polygon
                 self.start_new_polygon(event)
-            # else:
-            #     # Add vertex to current polygon
             self.add_vertex(event)
 
     def select_shape(self, event):

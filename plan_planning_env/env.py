@@ -5,17 +5,35 @@
 # Created on: 2025-06-06 12:11:36
 # Description:
 import gym
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon as MplPolygon
-from shapely.geometry import Polygon, LineString, Point
 import numpy as np
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon, LineString, Point
+from shapely.plotting import plot_polygon
 
-# 可用的env
-# __all__ = [ "PathPlanningWithLidar" ]
+# 降低传感器搜索障碍物的时间复杂度!!
+# 将地图划分为更小的区块（如 BlockMap 或 QuadTree），预先标记每个区块是否可通行。
+class BlockMap:
+    def __init__(self, map: Map, block_size: int = 2):
+        self.block_size = block_size
+        self.blocks = {}  # 键: (block_x, block_y), 值: 是否有障碍物
+        for x in range(0, map.width, block_size):
+            for y in range(0, map.height, block_size):
+                block_x, block_y = x // block_size, y // block_size
+                has_obstacle = any(
+                    map.grid[i, j] == 1
+                    for i in range(x, min(x + block_size, map.width))
+                    for j in range(y, min(y + block_size, map.height))
+                )
+                self.blocks[(block_x, block_y)] = has_obstacle
+
+    def is_block_occupied(self, x: float, y: float) -> bool:
+        block_x, block_y = int(x // self.block_size), int(y // self.block_size)
+        return self.blocks.get((block_x, block_y), False)
+
 
 class Map:
     def __init__(self,
-                 obstacles_vertices,
+                 obs_vertices,
                  map_size = [ [-10.0, -10.0], [10.0, 10.0] ],
                  start_pos = [-10.0, -10.0],
                  end_pos = [10.0, 10.0]):
@@ -24,9 +42,12 @@ class Map:
         self.start_pos = start_pos
         self.end_pos = end_pos
 
-        self.obstacles_vertices = obstacles_vertices
+        # convert vertices to polygons
+        self.obstacles = []
+        for obs_vertice in obs_vertices:
+            self.obstacles.append(Polygon(obs_vertice))
 
-class Lidar:
+class Lidar():
     def __init__(self, Map, max_range=20.0, scan_angle=128.0, num_angle=128):
         """ Args:
                 max_range (float): 最大扫描距离(m).
@@ -39,10 +60,8 @@ class Lidar:
         self.x, self.y = Map.start_pos
         self.yaw = 0.0
 
+        self.obstacles = Map.obstacles
         self.__ray_angles = np.deg2rad(np.linspace(-self.scan_angle/2, self.scan_angle/2, self.num_angle))
-        self.__poly_obstacles = []
-        for obstacle_vertices in Map.obstacles_vertices:
-            self.__poly_obstacles.append(Polygon(obstacle_vertices))
 
 
     def scan(self):
@@ -57,9 +76,8 @@ class Lidar:
         scan_distances = []
 
         # 碰撞
-        for poly_obstacle in self.__poly_obstacles:
-            if poly_obstacle.contains(Point(self.x,self.y)):
-                print(self.x, self.y)
+        for obstacle in self.obstacles:
+            if obstacle.contains(Point(self.x,self.y)):
                 return scan_distances, scan_points
 
         # 雷达测距
@@ -81,8 +99,8 @@ class Lidar:
         distance = self.max_range
 
         # TODO: O(n)
-        for poly_obstacle in self.__poly_obstacles:
-            intersections = poly_obstacle.intersection(ray_line)
+        for obstacle in self.obstacles:
+            intersections = obstacle.intersection(ray_line)
             if intersections.is_empty:
                 continue
             if intersections.geom_type in {'MultiPoint', 'MultiLineString', 'GeometryCollection'}:
@@ -99,6 +117,24 @@ class Lidar:
 
         return point, distance
 
+class Robot():
+
+    def __init__(self, Map, v_low, v_high, width, height):
+
+        self.x, self.y = Map.start_pos
+        self.end_x, self.end_y = Map.end_pos
+        self.v_low = v_low
+        self.v_high = v_high
+        self.width = width
+        self.height = height
+        self.sensor = Lidar(Map)
+        self.trajectory = []
+
+    def move(self, speed, end_x, end_y):
+        self.trajectory.append(end_x, end_y)
+
+
+
 
 # gym env
 class PathPlanningWithLidar(gym.Env):
@@ -111,7 +147,7 @@ class PathPlanningWithLidar(gym.Env):
 
         self.map = MAP
         self.sensor = Lidar(self.map)
-        print(f"distance point:{self.sensor.scan()}")
+
         # used for render function
         self.fig = None
 
@@ -129,21 +165,14 @@ class PathPlanningWithLidar(gym.Env):
             self.ax.set_ylim(self.map.size[0][1], self.map.size[1][1])
 
             # draw obstacles
-            for obstacle_vertices in self.map.obstacles_vertices:
-                self.ax.add_patch(
-                    MplPolygon(
-                        obstacle_vertices,
-                        closed = True,
-                        fill = True,
-                        facecolor = 'lightblue',
-                        edgecolor = 'black'
-                    )
-                )
+            for obstacle in self.map.obstacles:
+                plot_polygon(obstacle, ax=self.ax, facecolor='lightblue', edgecolor='black', add_points=False)
             plt.show()
         else:
             pass
 
         plt.pause(10)
+        plt.ioff()
 
     def close(self):
         if self.fig is not None:
