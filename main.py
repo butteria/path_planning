@@ -20,13 +20,15 @@ import pickle
 if __name__ == "__main__":
     try:
         with open("./plan_planning_env/obstacles/poly/poly.pkl", 'rb') as f:
-            obstacles = pickle.load(f)
+            map_data = pickle.load(f)
     except Exception as e:
         print(f"Error loading map: {e}")
     # print(obstacles)
 
-
-    custom_map = Map(obstacles)
+    vertices = map_data.get("obstacles", [])
+    start = map_data.get("start", None)
+    end = map_data.get("end", None)
+    custom_map = Map(obs_vertices=vertices, start=start, end=end)
     env = PathPlanningWithLidar(custom_map)
 
     # path solution method

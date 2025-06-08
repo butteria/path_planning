@@ -31,6 +31,14 @@ class MapEditor:
         self.selected_shape = None
         self.drag_start = None
 
+        # set start and end points
+        self.start= None
+        self.end = None
+        self.__set_end = False
+        self.__set_start = False
+        self.plt_start = self.ax.plot([], [], marker='*', color='green', markersize=15, label='start')[0]
+        self.plt_end = self.ax.plot([], [], marker='*', color='red', markersize=15, label='end')[0]
+
         # Setup axes
         self.ax.set_xlim(-10, 10)
         self.ax.set_ylim(-10, 10)
@@ -70,6 +78,18 @@ class MapEditor:
 
             self.select_shape(event)
         elif event.button == 1:  # Left click
+            x, y = event.xdata, event.ydata
+            if self.__set_start: # set start point
+                self.plt_start.set_data([x], [y])
+                self.redraw()
+                self.start = [x, y]
+                return
+            if self.__set_end: # set end point
+                self.plt_end.set_data([x], [y])
+                self.redraw()
+                self.end = [x, y]
+                return
+            
             if not self.drawing:
                 self.start_new_polygon(event)
             self.add_vertex(event)
@@ -166,8 +186,16 @@ class MapEditor:
             self.finish_polygon()
         elif event.key == 'escape':
             self.cancel_drawing()
+            self.__set_start = False
+            self.__set_end = False
         elif event.key == 'd' and self.selected_shape:
             self.delete_selected_shape()
+        elif event.key == 's':
+            self.__set_end = False
+            self.__set_start = True
+        elif event.key == 'e':
+            self.__set_start = False
+            self.__set_end = True
         elif event.key == 'ctrl+s':
             self.save_map("../plan_planning_env/obstacles/poly/poly.pkl")
             self.fig.savefig("../plan_planning_env/obstacles/img/map.png")
@@ -197,9 +225,14 @@ class MapEditor:
         for shape in self.ax.patches:
             if isinstance(shape, Polygon):
                 shapes_data.append(shape.get_xy().tolist())
+        map_data = {
+            "obstacles": shapes_data,
+            "start": self.start,
+            "end": self.end
+        }
 
         with open(filename, 'wb') as f:
-            pickle.dump(shapes_data, f)
+            pickle.dump(map_data, f)
 
         print(f"Map saved to {filename}")
 
@@ -207,20 +240,27 @@ class MapEditor:
         """Load map from file"""
         try:
             with open(filename, 'rb') as f:
-                shapes_data = pickle.load(f)
+                map_data = pickle.load(f)
 
             # Clear current map
             for shape in self.ax.patches[:]:
                 shape.remove()
 
             # Load shapes
-            for shape_data in shapes_data:
+            for shape_data in map_data.get("obstacles", []):
                 shape = Polygon(shape_data,
                                 fill=True,
                                 edgecolor='black',
                                 facecolor='lightblue',
                                 linewidth=2)
                 self.ax.add_patch(shape)
+            # Load start/end
+            self.start = map_data.get("start", None)
+            self.end = map_data.get("end", None)
+            if self.start:
+                self.plt_start.set_data(self.start)
+            if self.end:
+                self.plt_end.set_data(self.end)
 
             print(f"Map loaded from {filename}")
             self.redraw()
