@@ -6,4 +6,5 @@
 # Description:
 
 from .env import Map, PathPlanningWithLidar
-__all__ = ["Map", "PathPlanningWithLidar"]
+from .solutions import RRT
+__all__ = ["Map", "PathPlanningWithLidar", "RRT"]

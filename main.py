@@ -6,11 +6,11 @@
 # Description:
 
 # load my env
-from plan_planning_env import Map, PathPlanningWithLidar
+from plan_planning_env import Map, PathPlanningWithLidar, RRT
+
 import numpy as np
 from matplotlib.patches import Polygon
 import pickle
-
 # load obstacles to custom_map
 
 
@@ -29,4 +29,8 @@ if __name__ == "__main__":
     custom_map = Map(obstacles)
     env = PathPlanningWithLidar(custom_map)
 
+    # path solution method
+    rrt = RRT(custom_map)
+    env.path = rrt.plan()
     env.render()
+    # env.render()

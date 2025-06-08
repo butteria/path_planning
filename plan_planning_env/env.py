@@ -14,12 +14,12 @@ class Map:
     def __init__(self,
                  obs_vertices,
                  map_size = [ [-10.0, -10.0], [10.0, 10.0] ],
-                 start_pos = [-10.0, -10.0],
-                 end_pos = [10.0, 10.0]):
+                 start = [-2, -2],
+                 end = [8.0, 8.0]):
 
         self.size = map_size
-        self.start_pos = start_pos
-        self.end_pos = end_pos
+        self.start = start
+        self.end = end
 
         # convert vertices to polygons
         self.obstacles = []
@@ -36,8 +36,9 @@ class Lidar():
         self.max_range = float(max_range)
         self.scan_angle = float(scan_angle)
         self.num_angle = int(num_angle)
-        self.x, self.y = Map.start_pos
-        self.yaw = 0.0
+        self.x, self.y = Map.start
+        # 偏航角初始为正北方
+        self.yaw = np.deg2rad(90.0)
 
         self.obstacles = Map.obstacles
         self.__ray_angles = np.deg2rad(np.linspace(-self.scan_angle/2, self.scan_angle/2, self.num_angle))
@@ -53,11 +54,23 @@ class Lidar():
         # 激光与障碍物交点
         scan_points = []
         scan_distances = []
+        ray_lines = [
+            LineString([
+                (self.x, self.y),
+                (self.x + self.max_range * np.cos(self.yaw + self.__ray_angles[0]),
+                  self.y + self.max_range * np.sin(self.yaw + self.__ray_angles[0]))
+            ]),
+             LineString([
+                (self.x, self.y),
+                (self.x + self.max_range * np.cos(self.yaw + self.__ray_angles[-1]),
+                  self.y + self.max_range * np.sin(self.yaw + self.__ray_angles[-1]))
+            ])
+        ]
 
         # 碰撞
         for obstacle in self.obstacles:
             if obstacle.contains(Point(self.x,self.y)):
-                return scan_distances, scan_points
+                return scan_distances, scan_points, ray_lines
 
         # 雷达测距
         for i, angle in enumerate(self.__ray_angles):
@@ -65,12 +78,13 @@ class Lidar():
                 (self.x, self.y),
                 (self.x + self.max_range * np.cos(self.yaw + angle), self.y + self.max_range * np.sin(self.yaw + angle))
             ])
+
             point, distance = self.__compute_intersection(line)
             if point is not None:
                 scan_distances.append(distance)
                 scan_points.append(point)
 
-        return scan_distances, scan_points
+        return scan_distances, scan_points, ray_lines
 
     # 计算雷达射线和障碍物的交点和距离
     def __compute_intersection(self, ray_line: LineString):
@@ -106,10 +120,17 @@ class PathPlanningWithLidar(gym.Env):
         super(PathPlanningWithLidar, self).__init__()
 
         self.map = MAP
-        self.sensor = Lidar(self.map)
+        self.lidar = Lidar(self.map)
 
         # used for render function
         self.fig = None
+
+        # 显示轨迹
+        self.trajectory = [ self.map.start, [-2,-1] ]
+        self.__traj_index = -1
+    def step(self, action):
+        pass
+
 
     def render(self, mode='human'):
         if self.fig is None:
@@ -124,14 +145,39 @@ class PathPlanningWithLidar(gym.Env):
             self.ax.set_xlim(self.map.size[0][0], self.map.size[1][0])
             self.ax.set_ylim(self.map.size[0][1], self.map.size[1][1])
 
+
+            self.robot, = self.ax.plot([], [], 'ro', markersize=10)
+
+            # 画出终点
+            self.ax.plot(self.map.end[0], self.map.end[1], 'go', markersize=10, label='Goal')
+            if hasattr(self, "path") and self.path is not None and len(self.path) > 1:
+                path_arr = np.array(self.path)
+                self.ax.plot(path_arr[:, 0], path_arr[:, 1], color='blue', linewidth=2, label='RRT Path')
             # draw obstacles
             for obstacle in self.map.obstacles:
                 plot_polygon(obstacle, ax=self.ax, facecolor='lightblue', edgecolor='black', add_points=False)
             plt.show()
-        else:
-            pass
 
-        plt.pause(10)
+        # show lidar points
+        scan_distances, scan_points, ray_lines = self.lidar.scan()
+
+    
+        if scan_points:
+            scan_points = np.array(scan_points)
+            # 画出交点
+            self.ax.scatter(scan_points[:, 0], scan_points[:, 1], c='red', s=10, label='Lidar Hits')
+        # 画出雷达射线
+        for ray_line in ray_lines:
+            x, y = ray_line.xy
+            self.ax.plot(x, y, color='orange', linewidth=0.5, linestyle='--', label='Lidar Rays')
+        
+        # 画出轨迹
+        self.__traj_index += 1
+        x, y = self.trajectory[self.__traj_index]
+        self.robot.set_data(x, y)
+        
+        
+        plt.pause(100)
         plt.ioff()
 
     def close(self):
