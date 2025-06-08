@@ -10,27 +10,6 @@ import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, LineString, Point
 from shapely.plotting import plot_polygon
 
-# 降低传感器搜索障碍物的时间复杂度!!
-# 将地图划分为更小的区块（如 BlockMap 或 QuadTree），预先标记每个区块是否可通行。
-class BlockMap:
-    def __init__(self, map: Map, block_size: int = 2):
-        self.block_size = block_size
-        self.blocks = {}  # 键: (block_x, block_y), 值: 是否有障碍物
-        for x in range(0, map.width, block_size):
-            for y in range(0, map.height, block_size):
-                block_x, block_y = x // block_size, y // block_size
-                has_obstacle = any(
-                    map.grid[i, j] == 1
-                    for i in range(x, min(x + block_size, map.width))
-                    for j in range(y, min(y + block_size, map.height))
-                )
-                self.blocks[(block_x, block_y)] = has_obstacle
-
-    def is_block_occupied(self, x: float, y: float) -> bool:
-        block_x, block_y = int(x // self.block_size), int(y // self.block_size)
-        return self.blocks.get((block_x, block_y), False)
-
-
 class Map:
     def __init__(self,
                  obs_vertices,
@@ -116,25 +95,6 @@ class Lidar():
                         point = list(p)
 
         return point, distance
-
-class Robot():
-
-    def __init__(self, Map, v_low, v_high, width, height):
-
-        self.x, self.y = Map.start_pos
-        self.end_x, self.end_y = Map.end_pos
-        self.v_low = v_low
-        self.v_high = v_high
-        self.width = width
-        self.height = height
-        self.sensor = Lidar(Map)
-        self.trajectory = []
-
-    def move(self, speed, end_x, end_y):
-        self.trajectory.append(end_x, end_y)
-
-
-
 
 # gym env
 class PathPlanningWithLidar(gym.Env):
