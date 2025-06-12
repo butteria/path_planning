@@ -9,17 +9,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.lines import Line2D
+from matplotlib.path import Path
 import tkinter as tk
-import os
 from tkinter import filedialog
+import os
 import pickle
+import random
 
 plt.rcParams['toolbar'] = 'None'
 plt.rcParams['xtick.bottom'] = False
 plt.rcParams['xtick.labelbottom'] = False
 plt.rcParams['ytick.left'] = False
 plt.rcParams['ytick.labelleft'] = False
-current_dir = os.getcwd()
+save_dir = os.getcwd()+"/dataset/trains/"
+
 class MapEditor:
     def __init__(self):
 
@@ -276,58 +279,89 @@ class MapEditor:
             self.temp_line.set_data([], [])
             self.redraw()
 
+    def is_in_obstacle(self, point):
+        for obs in self.ax.patches:
+            path = Path(obs.get_xy())
+            if path.contains_point(point):
+                return True
+        return False
+
+    def random_start_end(self, n, min_dist=10.0):
+        results = []
+        for _ in range(n):
+            tries = 0
+            while True:
+                tries += 1
+                if tries > 1000:
+                    raise RuntimeError("cant find valid start/end points after 1000 tries")
+                start = (random.uniform(*self.ax.get_xlim()), random.uniform(*self.ax.get_ylim()))
+                end = (random.uniform(*self.ax.get_xlim()), random.uniform(*self.ax.get_ylim()))
+                if (not self.is_in_obstacle(start) and
+                    not self.is_in_obstacle(end) and
+                    np.linalg.norm(np.array(start) - np.array(end)) > min_dist):
+                    results.append([start, end])
+                    break
+        return results
+
     def save_map(self):
         file_path = filedialog.asksaveasfilename(
             defaultextension=".pkl",
-            initialdir=current_dir+"/obstacles/poly/",
-            filetypes=[("Pickle files", "*.pkl")],
-            title="保存地图",
+            initialdir=save_dir,
+            filetypes=[("pickle files", "*.pkl")],
+            title="save map",
         )
         if file_path:
-            shapes_data = []
-            for shape in self.ax.patches:
-                if isinstance(shape, Polygon):
-                    shapes_data.append(shape.get_xy().tolist())
-            map_data = {
-                "obstacles": shapes_data,
-                "start": self.start,
-                "end": self.end
+            obstacles = []  
+            for obs in self.ax.patches:
+                if isinstance(obs, Polygon):
+                    obstacles.append(obs.get_xy().tolist())
+            
+            # generate random start and end points
+            if not self.start and not self.end: 
+                start_end_pairs = self.random_start_end(20)
+            else:
+                start_end_pairs = [[self.start, self.end]]
+            data = {
+                "obstacles": obstacles,
+                "start_end_pairs": start_end_pairs,
             }
 
             with open(file_path, 'wb') as f:
-                pickle.dump(map_data, f)
-            # both save image
-            self.fig.savefig(current_dir+"/obstacles/img/"+os.path.splitext(os.path.basename(file_path))[0])
-
+                pickle.dump(data, f)
+            plt.close()
+            
     def load_map(self):
         file_path = filedialog.askopenfilename(
             defaultextension=".pkl",
-            initialdir=current_dir+"/obstacles/poly/",
-            filetypes=[("Pickle files", "*.pkl")],
-            title="读取地图",
+            initialdir=save_dir,
+            filetypes=[("pickle files", "*.pkl")],
+            title="load map",
         )
         if file_path:
             with open(file_path, 'rb') as f:
-                map_data = pickle.load(f)
+                data = pickle.load(f)
                 
                 # Clear current map
-                for shape in self.ax.patches[:]:
-                    shape.remove()
-                # Load shapes
-                for shape_data in map_data.get("obstacles", []):
-                    shape = Polygon(shape_data,
+                for obs in self.ax.patches[:]:
+                    obs.remove()
+                # Load obstacles
+                for obs in data.get("obstacles", []):
+                    self.ax.add_patch(Polygon(obs,
                                     fill=True,
                                     edgecolor='black',
                                     facecolor='lightblue',
-                                    linewidth=2)
-                    self.ax.add_patch(shape)
-                # Load start/end
-                self.start = map_data.get("start", None)
-                self.end = map_data.get("end", None)
-                if self.start:
-                    self.plt_start.set_data(self.start)
-                if self.end:
-                    self.plt_end.set_data(self.end)
+                                    linewidth=2))
+                
+                # Load start and end points
+                start_end_pairs = data.get("start_end_pairs", None)
+                if start_end_pairs:
+                    # Randomly select a start/end pair
+                    start_end = random.choice(start_end_pairs)
+                    # Load start/end
+                    self.start, self.end = start_end
+                    self.plt_start.set_data([self.start[0]], [self.start[1]])
+                    self.plt_end.set_data([self.end[0]], [self.end[1]])
+
                 self.redraw()
 
     def redraw(self):
