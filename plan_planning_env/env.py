@@ -131,13 +131,33 @@ class PathPlanningWithLidar(gym.Env):
 
         # used for render function
         self.fig = None
+        
+        self.path = None
+        self.__path_index = 0
 
         # 显示轨迹
         self.trajectory = [ self.map.start, [-2,-1] ]
         self.__traj_index = -1
-    def step(self, action):
-        pass
 
+    def reset(self):
+        self.lidar.x, self.lidar.y = self.map.start # reset lidar position
+        self.lidar.yaw = np.deg2rad(90.0)  # reset lidar yaw to north
+
+
+    def step(self, action=1):
+        """ Args:
+                action (int) 1: forward, -1: backward
+        """
+        if self.__path_index == 0:
+            return False, (self.lidar.x, self.lidar.y, self.lidar.scan()[0])
+        self.__path_index += action
+        if not self.path or self.__path_index < 0 or self.__path_index >= len(self.path):
+            return True, (self.lidar.x, self.lidar.y, self.lidar.scan()[0])  # done_state, observation
+        self.lidar.x, self.lidar.y = self.path[self.__path_index]
+        self.lidar.yaw = np.arctan2(self.path[self.__path_index][1] - self.path[self.__path_index-1][1],
+                                    self.path[self.__path_index][0] - self.path[self.__path_index-1][0])
+        
+        return False, (self.lidar.x, self.lidar.y, self.lidar.scan()[0])  # done_state, observation
 
     def render(self, mode='human'):
         if self.fig is None:

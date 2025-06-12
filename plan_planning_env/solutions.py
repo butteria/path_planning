@@ -68,9 +68,10 @@ class WaveFront:
     """
     基于栅格的涟漪（Wavefront）路径规划算法
     """
-    def __init__(self, Map, grid_resolution=0.1):
+    def __init__(self, Map, grid_resolution=0.1, safe_margin=0.2):
         self.map = Map
         self.grid_resolution = grid_resolution
+        self.safe_margin = safe_margin  # 新增：安全距离
         self.start = np.array(self.map.start)
         self.end = np.array(self.map.end)
         self.grid, self.ox, self.oy = self.create_occupancy_grid()
@@ -78,17 +79,19 @@ class WaveFront:
 
     def create_occupancy_grid(self):
         """
-        将地图障碍物转为栅格地图
+        将地图障碍物转为栅格地图，并考虑安全距离
         """
         min_x, min_y = self.map.size[0]
         max_x, max_y = self.map.size[1]
         ox = np.arange(min_x, max_x + self.grid_resolution, self.grid_resolution)
         oy = np.arange(min_y, max_y + self.grid_resolution, self.grid_resolution)
         grid = np.zeros((len(ox), len(oy)), dtype=np.int8)
+        # 对障碍物进行膨胀
+        buffered_obs = [obs.buffer(self.safe_margin) for obs in self.map.obstacles]
         for i, x in enumerate(ox):
             for j, y in enumerate(oy):
                 p = Point(x, y)
-                for obs in self.map.obstacles:
+                for obs in buffered_obs:
                     if obs.contains(p):
                         grid[i, j] = 1  # 障碍物
                         break

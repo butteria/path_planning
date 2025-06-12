@@ -35,5 +35,11 @@ if __name__ == "__main__":
     # rrt = RRT(custom_map)
     wf =WaveFront(custom_map)
     env.path = wf.plan()
-    
-    env.render()
+    print(env.path)
+    # done = False
+    # while not done:
+    #     done, obs = env.step()
+    #     print(obs)
+
+    #env.render()
+    # env.render()
