@@ -56,16 +56,6 @@ class MapEditor:
         self.ax.grid(True, linestyle='--', alpha=0.7)
         self.ax.set_aspect('equal')
 
-        # Status text
-        # self.status_text = self.ax.text(-10, 11,
-        #                               "LEFT CLICK: Add polygon vertices\n"
-        #                               "RIGHT CLICK: Select shapes (turns red)\n"
-        #                               "D: Delete selected shape\n"
-        #                               "ENTER: Complete polygon\n"
-        #                               "ESC: Cancel drawing\n"
-        #                               "CTRL+S: Save map  CTRL+L: Load map",
-        #                               bbox=dict(facecolor='white', alpha=0.8))
-
         # Temporary dashed line for drawing
         self.temp_line = Line2D([], [], color='red', linestyle='--', alpha=0.7)
         self.ax.add_line(self.temp_line)
@@ -321,10 +311,16 @@ class MapEditor:
                 start_end_pairs = self.random_start_end(20)
             else:
                 start_end_pairs = [[self.start, self.end]]
+
             data = {
                 "obstacles": obstacles,
-                "start_end_pairs": start_end_pairs,
+                "runs": [],
             }
+            for i, (start, end) in enumerate(start_end_pairs):
+                data["runs"].append({
+                    "start": start,
+                    "end": end
+                })
 
             with open(file_path, 'wb') as f:
                 pickle.dump(data, f)
@@ -353,12 +349,12 @@ class MapEditor:
                                     linewidth=2))
                 
                 # Load start and end points
-                start_end_pairs = data.get("start_end_pairs", None)
-                if start_end_pairs:
+                runs = data.get("runs", None)
+                if runs:
                     # Randomly select a start/end pair
-                    start_end = random.choice(start_end_pairs)
-                    # Load start/end
-                    self.start, self.end = start_end
+                    run = random.choice(runs)
+                    self.start = run["start"]
+                    self.end = run["end"]
                     self.plt_start.set_data([self.start[0]], [self.start[1]])
                     self.plt_end.set_data([self.end[0]], [self.end[1]])
 

@@ -13,6 +13,7 @@ import os
 from matplotlib.patches import Polygon
 import matplotlib.pyplot as plt
 import pickle
+import random
 # load obstacles to custom_map
 
 filename = "test.pkl"
@@ -20,30 +21,24 @@ filename = "test.pkl"
 
 if __name__ == "__main__":
     # path datasets
-    path_path = './dataset/path'
-    poly_path = './obstacles/poly'
-    path_files = [f.path for f in os.scandir(path_path) if f.name.endswith('.path') and f.is_file()]
-    pkl_files = [f.path for f in os.scandir(poly_path) if f.name.endswith('.pkl') and f.is_file()]
+    trains_path = './dataset/trains'
+    pkl_files = [f.path for f in os.scandir(trains_path) if f.name.endswith('.pkl') and f.is_file()]
 
-    for pkl_file, path_file in zip(pkl_files, path_files):
-        try:
-            with open(pkl_file, 'rb') as f:
-                map_data = pickle.load(f)
-        except Exception as e:
-            print(f"Error loading map: {e}")
-        try:
-            with open(path_file, 'rb') as f:
-                path_data = pickle.load(f)
-        except Exception as e:
-            print(f"Error loading path: {e}")
+    for pkl_file in pkl_files:
+        with open(pkl_file, 'rb') as f:
+            data = pickle.load(f)
+        
 
+        obstacles = data.get("obstacles", [])
+        runs = data.get("runs", None)
+        run = random.choice(runs) if runs else None
 
-        vertices = map_data.get("obstacles", [])
-        start = map_data.get("start", None)
-        end = map_data.get("end", None)
-        custom_map = Map(obs_vertices=vertices, start=start, end=end)
+        start = run.get("start", None)
+        end = run.get("end", None)
+        custom_map = Map(obs_vertices=obstacles, start=start, end=end)
         env = PathPlanningWithLidar(custom_map)
-        env.path = path_data.get("path", None)
+        env.path = run.get("path", None)
+        print(env.path)
         done = False
         while not done:
             done, obs = env.step()
@@ -51,4 +46,3 @@ if __name__ == "__main__":
         
 
         env.close()
-        break
