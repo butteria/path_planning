@@ -21,6 +21,7 @@ plt.rcParams['xtick.bottom'] = False
 plt.rcParams['xtick.labelbottom'] = False
 plt.rcParams['ytick.left'] = False
 plt.rcParams['ytick.labelleft'] = False
+
 save_dir = os.getcwd()+"/dataset/trains/"
 
 class MapEditor:
@@ -29,9 +30,7 @@ class MapEditor:
         # Initialize figure and axes
         self.fig, self.ax = plt.subplots(figsize=(10, 10))
         self.fig.canvas.manager.set_window_title('Map Editor')
-        # self.mode = "drawing"
-        # self.fig.suptitle(f"{self.mode} mode", y=0.98)  # y=0.98 靠近顶部
-        
+       
         self.scaling = False
         self.scale_ref_dist = None
         self.scale_ref_vertices = None

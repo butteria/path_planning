@@ -19,19 +19,16 @@ plt.rcParams['figure.autolayout'] = True
 
 class Map:
     def __init__(self,
-                 obs_vertices,
-                 map_size = [ [-10.0, -10.0], [10.0, 10.0] ],
+                 obstacles,
                  start = [-2, -2],
-                 end = [8.0, 8.0]):
+                 end = [8.0, 8.0],
+                 map_size = [ [-10.0, -10.0], [10.0, 10.0] ]):
 
         self.size = map_size
         self.start = start
         self.end = end
-
         # convert vertices to polygons
-        self.obstacles = []
-        for obs_vertice in obs_vertices:
-            self.obstacles.append(Polygon(obs_vertice))
+        self.obstacles = [ Polygon(obs) for obs in obstacles ]
 
 class Lidar():
     def __init__(self, Map, max_range=20.0, scan_angle=128.0, num_angle=128):
