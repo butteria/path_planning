@@ -9,6 +9,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.lines import Line2D
+import tkinter as tk
+import os
+from tkinter import filedialog
 import pickle
 
 plt.rcParams['toolbar'] = 'None'
@@ -16,14 +19,19 @@ plt.rcParams['xtick.bottom'] = False
 plt.rcParams['xtick.labelbottom'] = False
 plt.rcParams['ytick.left'] = False
 plt.rcParams['ytick.labelleft'] = False
-
+current_dir = os.getcwd()
 class MapEditor:
     def __init__(self):
 
         # Initialize figure and axes
         self.fig, self.ax = plt.subplots(figsize=(10, 10))
         self.fig.canvas.manager.set_window_title('Map Editor')
-
+        # self.mode = "drawing"
+        # self.fig.suptitle(f"{self.mode} mode", y=0.98)  # y=0.98 靠近顶部
+        
+        self.scaling = False
+        self.scale_ref_dist = None
+        self.scale_ref_vertices = None
         # Drawing state
         self.current_shape = None
         self.current_vertices = []
@@ -46,14 +54,14 @@ class MapEditor:
         self.ax.set_aspect('equal')
 
         # Status text
-        self.status_text = self.ax.text(-10, 11,
-                                      "LEFT CLICK: Add polygon vertices\n"
-                                      "RIGHT CLICK: Select shapes (turns red)\n"
-                                      "D: Delete selected shape\n"
-                                      "ENTER: Complete polygon\n"
-                                      "ESC: Cancel drawing\n"
-                                      "CTRL+S: Save map  CTRL+L: Load map",
-                                      bbox=dict(facecolor='white', alpha=0.8))
+        # self.status_text = self.ax.text(-10, 11,
+        #                               "LEFT CLICK: Add polygon vertices\n"
+        #                               "RIGHT CLICK: Select shapes (turns red)\n"
+        #                               "D: Delete selected shape\n"
+        #                               "ENTER: Complete polygon\n"
+        #                               "ESC: Cancel drawing\n"
+        #                               "CTRL+S: Save map  CTRL+L: Load map",
+        #                               bbox=dict(facecolor='white', alpha=0.8))
 
         # Temporary dashed line for drawing
         self.temp_line = Line2D([], [], color='red', linestyle='--', alpha=0.7)
@@ -61,7 +69,12 @@ class MapEditor:
 
         # Connect events
         self.connect_events()
+        root = tk.Tk()
+        root.withdraw()
 
+
+
+    # add event listeners
     def connect_events(self):
         self.fig.canvas.mpl_connect('button_press_event', self.on_click)
         self.fig.canvas.mpl_connect('motion_notify_event', self.on_motion)
@@ -71,28 +84,35 @@ class MapEditor:
     def on_click(self, event):
         if event.inaxes != self.ax:
             return
-
+        
+        x, y = event.xdata, event.ydata
         if event.button == 3:  # Right click - select shape
             if self.selected_shape:
                 self.drag_start = (event.xdata, event.ydata)
-
-            self.select_shape(event)
+            if event.key == 'control':  # Ctrl+rightmouse scale
+                if self.selected_shape:
+                    self.scaling = True
+                    verts = np.array(self.selected_shape.get_xy())
+                    self.scale_ref_vertices = verts.copy()
+                    center = verts.mean(axis=0)
+                    self.scale_center = center
+                    self.scale_ref_dist = np.linalg.norm([event.xdata - center[0], event.ydata - center[1]])
+            else:
+                self.select_shape(event)
         elif event.button == 1:  # Left click
-            x, y = event.xdata, event.ydata
-            if self.__set_start: # set start point
-                self.plt_start.set_data([x], [y])
-                self.redraw()
-                self.start = [x, y]
-                return
-            if self.__set_end: # set end point
-                self.plt_end.set_data([x], [y])
-                self.redraw()
-                self.end = [x, y]
-                return
-            
-            if not self.drawing:
-                self.start_new_polygon(event)
-            self.add_vertex(event)
+            if self.drawing:
+                self.add_vertex(event)
+            else:
+                if self.__set_start: # set start point
+                    self.plt_start.set_data([x], [y])
+                    self.redraw()
+                    self.start = [x, y]
+                elif self.__set_end: # set end point
+                    self.plt_end.set_data([x], [y])
+                    self.redraw()
+                    self.end = [x, y]
+                else:
+                    self.start_new_polygon(event)
 
     def select_shape(self, event):
         """Select shape under mouse cursor"""
@@ -157,7 +177,18 @@ class MapEditor:
         if event.inaxes != self.ax:
             return
 
-        if self.drawing and len(self.current_vertices) > 0:
+        if self.scaling and self.selected_shape and self.scale_ref_dist is not None:
+            if event.xdata is None or event.ydata is None:
+                return
+            # 缩放操作
+            center = self.scale_center
+            curr_dist = np.linalg.norm([event.xdata - center[0], event.ydata - center[1]])
+            scale = curr_dist / self.scale_ref_dist if self.scale_ref_dist != 0 else 1.0
+            verts = (self.scale_ref_vertices - center) * scale + center
+            self.selected_shape.set_xy(verts)
+            self.redraw()
+
+        elif self.drawing and len(self.current_vertices) > 0:
             # Update temporary dashed line during drawing
             last_point = self.current_vertices[-1]
             self.temp_line.set_data([last_point[0], event.xdata],
@@ -176,6 +207,11 @@ class MapEditor:
             self.redraw()
 
     def on_release(self, event):
+        if event.button == 3:
+            if self.scaling:
+                self.scaling = False
+                self.scale_ref_dist = None
+                self.scale_ref_vertices = None
         """Handle mouse release after dragging"""
         if event.button == 3 and hasattr(self, 'drag_start'):
             self.drag_start = None
@@ -197,10 +233,9 @@ class MapEditor:
             self.__set_start = False
             self.__set_end = True
         elif event.key == 'ctrl+s':
-            self.save_map("../plan_planning_env/obstacles/poly/poly.pkl")
-            self.fig.savefig("../plan_planning_env/obstacles/img/map.png")
+            self.save_map()
         elif event.key == 'ctrl+l':
-            self.load_map("../plan_planning_env/obstacles/poly/poly.pkl")
+            self.load_map()
 
     def delete_selected_shape(self):
         """Delete selected shape and restore left click functionality"""
@@ -219,53 +254,59 @@ class MapEditor:
             self.temp_line.set_data([], [])
             self.redraw()
 
-    def save_map(self, filename='poly.pkl'):
-        """Save map to file"""
-        shapes_data = []
-        for shape in self.ax.patches:
-            if isinstance(shape, Polygon):
-                shapes_data.append(shape.get_xy().tolist())
-        map_data = {
-            "obstacles": shapes_data,
-            "start": self.start,
-            "end": self.end
-        }
+    def save_map(self):
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".pkl",
+            initialdir=current_dir+"/obstacles/poly/",
+            filetypes=[("Pickle files", "*.pkl")],
+            title="保存地图",
+        )
+        if file_path:
+            shapes_data = []
+            for shape in self.ax.patches:
+                if isinstance(shape, Polygon):
+                    shapes_data.append(shape.get_xy().tolist())
+            map_data = {
+                "obstacles": shapes_data,
+                "start": self.start,
+                "end": self.end
+            }
 
-        with open(filename, 'wb') as f:
-            pickle.dump(map_data, f)
+            with open(file_path, 'wb') as f:
+                pickle.dump(map_data, f)
+            # both save image
+            self.fig.savefig(current_dir+"/obstacles/img/"+os.path.splitext(os.path.basename(file_path))[0], bbox_inches='tight')
 
-        print(f"Map saved to {filename}")
-
-    def load_map(self, filename='poly.pkl'):
-        """Load map from file"""
-        try:
-            with open(filename, 'rb') as f:
+    def load_map(self):
+        file_path = filedialog.askopenfilename(
+            defaultextension=".pkl",
+            initialdir=current_dir+"/obstacles/poly/",
+            filetypes=[("Pickle files", "*.pkl")],
+            title="读取地图",
+        )
+        if file_path:
+            with open(file_path, 'rb') as f:
                 map_data = pickle.load(f)
-
-            # Clear current map
-            for shape in self.ax.patches[:]:
-                shape.remove()
-
-            # Load shapes
-            for shape_data in map_data.get("obstacles", []):
-                shape = Polygon(shape_data,
-                                fill=True,
-                                edgecolor='black',
-                                facecolor='lightblue',
-                                linewidth=2)
-                self.ax.add_patch(shape)
-            # Load start/end
-            self.start = map_data.get("start", None)
-            self.end = map_data.get("end", None)
-            if self.start:
-                self.plt_start.set_data(self.start)
-            if self.end:
-                self.plt_end.set_data(self.end)
-
-            print(f"Map loaded from {filename}")
-            self.redraw()
-        except Exception as e:
-            print(f"Error loading map: {e}")
+                
+                # Clear current map
+                for shape in self.ax.patches[:]:
+                    shape.remove()
+                # Load shapes
+                for shape_data in map_data.get("obstacles", []):
+                    shape = Polygon(shape_data,
+                                    fill=True,
+                                    edgecolor='black',
+                                    facecolor='lightblue',
+                                    linewidth=2)
+                    self.ax.add_patch(shape)
+                # Load start/end
+                self.start = map_data.get("start", None)
+                self.end = map_data.get("end", None)
+                if self.start:
+                    self.plt_start.set_data(self.start)
+                if self.end:
+                    self.plt_end.set_data(self.end)
+                self.redraw()
 
     def redraw(self):
         """Redraw canvas"""
@@ -274,5 +315,6 @@ class MapEditor:
 # Run the editor
 if __name__ == '__main__':
     editor = MapEditor()
+
     plt.tight_layout()
     plt.show()
