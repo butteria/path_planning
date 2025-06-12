@@ -6,20 +6,20 @@
 # Description:
 
 # load my env
-from plan_planning_env import Map, PathPlanningWithLidar, RRT
+from plan_planning_env import Map, PathPlanningWithLidar, RRT, WaveFront
 
 import numpy as np
 from matplotlib.patches import Polygon
+import matplotlib.pyplot as plt
 import pickle
 # load obstacles to custom_map
 
-
-
+filename = "test.pkl"
 
 
 if __name__ == "__main__":
     try:
-        with open("./plan_planning_env/obstacles/poly/poly.pkl", 'rb') as f:
+        with open("./obstacles/poly/"+filename, 'rb') as f:
             map_data = pickle.load(f)
     except Exception as e:
         print(f"Error loading map: {e}")
@@ -32,7 +32,8 @@ if __name__ == "__main__":
     env = PathPlanningWithLidar(custom_map)
 
     # path solution method
-    rrt = RRT(custom_map)
-    env.path = rrt.plan()
+    # rrt = RRT(custom_map)
+    wf =WaveFront(custom_map)
+    env.path = wf.plan()
     env.render()
     # env.render()

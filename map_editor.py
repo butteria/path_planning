@@ -72,6 +72,7 @@ class MapEditor:
         root = tk.Tk()
         root.withdraw()
 
+        self.copied_shape_vertices = None  # 新增：用于存储复制的图形
 
 
     # add event listeners
@@ -166,6 +167,8 @@ class MapEditor:
         """Complete current polygon"""
         if self.drawing and self.current_shape and len(self.current_vertices) > 2:
             self.current_shape.set_closed(True)
+            self.current_shape.set_fill(True)  # 填充颜色
+            self.current_shape.set_facecolor('lightblue')  # 设置填充色
             self.drawing = False
             self.current_shape = None
             self.current_vertices = []
@@ -236,6 +239,25 @@ class MapEditor:
             self.save_map()
         elif event.key == 'ctrl+l':
             self.load_map()
+        elif event.key == 'ctrl+v':  # 新增：粘贴
+            self.paste_shape()
+        elif event.key == 'ctrl+c':  # 新增：复制
+            self.copy_shape()
+
+    def copy_shape(self):
+        """复制当前选中的图形"""
+        if self.selected_shape:
+            self.copied_shape_vertices = np.array(self.selected_shape.get_xy())
+
+    def paste_shape(self):
+        """粘贴复制的图形，默认平移一点避免重叠"""
+        if self.copied_shape_vertices is not None:
+            offset = np.array([0.5, 0.5])  # 粘贴时平移一点
+            new_vertices = self.copied_shape_vertices + offset
+            new_shape = Polygon(new_vertices, fill=True, edgecolor='black', facecolor='lightblue', linewidth=2)
+            self.ax.add_patch(new_shape)
+            self.selected_shape = new_shape  # 自动选中新图形
+            self.redraw()
 
     def delete_selected_shape(self):
         """Delete selected shape and restore left click functionality"""
@@ -275,7 +297,7 @@ class MapEditor:
             with open(file_path, 'wb') as f:
                 pickle.dump(map_data, f)
             # both save image
-            self.fig.savefig(current_dir+"/obstacles/img/"+os.path.splitext(os.path.basename(file_path))[0], bbox_inches='tight')
+            self.fig.savefig(current_dir+"/obstacles/img/"+os.path.splitext(os.path.basename(file_path))[0])
 
     def load_map(self):
         file_path = filedialog.askopenfilename(

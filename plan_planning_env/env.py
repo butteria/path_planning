@@ -10,6 +10,13 @@ import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, LineString, Point
 from shapely.plotting import plot_polygon
 
+plt.rcParams['toolbar'] = 'None'
+plt.rcParams['xtick.bottom'] = False
+plt.rcParams['xtick.labelbottom'] = False
+plt.rcParams['ytick.left'] = False
+plt.rcParams['ytick.labelleft'] = False
+plt.rcParams['figure.autolayout'] = True
+
 class Map:
     def __init__(self,
                  obs_vertices,
@@ -136,14 +143,16 @@ class PathPlanningWithLidar(gym.Env):
         if self.fig is None:
             plt.ion()
             # ax config
-            self.fig, self.ax = plt.subplots(figsize=(8, 8))
-            self.ax.set_aspect('equal')
-            self.ax.set_xticks([])
-            self.ax.set_yticks([])
-            self.ax.set_title('Path Planning')
+            self.fig, self.ax = plt.subplots(figsize=(10, 10))
+            # self.ax.set_aspect('equal')
+            # self.ax.set_xticks([])
+            # self.ax.set_yticks([])
+            # self.ax.set_title('Path Planning')
 
-            self.ax.set_xlim(self.map.size[0][0], self.map.size[1][0])
-            self.ax.set_ylim(self.map.size[0][1], self.map.size[1][1])
+            # self.ax.set_xlim(self.map.size[0][0], self.map.size[1][0])
+            self.ax.set_xlim(-10, 10)
+            self.ax.set_ylim(-10, 10)
+            # self.ax.set_ylim(self.map.size[0][1], self.map.size[1][1])
 
 
             self.robot, = self.ax.plot([], [], 'ro', markersize=10)
