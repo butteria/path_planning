@@ -7,5 +7,5 @@
 
 from .env import Map, PathPlanningWithLidar
 from .solutions import RRT, WaveFront
-from .transformer import LidarPathTransformer, PathPredictor
+# from .transformer import LidarPathTransformer, PathPredictor
 __all__ = ["Map", "PathPlanningWithLidar", "RRT", "WaveFront", "LidarPathTransformer", "PathPredictor"]

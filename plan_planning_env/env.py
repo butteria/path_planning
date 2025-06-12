@@ -133,11 +133,7 @@ class PathPlanningWithLidar(gym.Env):
         self.fig = None
         
         self.path = None
-        self.__path_index = 0
-
-        # 显示轨迹
-        self.trajectory = [ self.map.start, [-2,-1] ]
-        self.__traj_index = -1
+        self.__path_index = -1
 
     def reset(self):
         self.lidar.x, self.lidar.y = self.map.start # reset lidar position
@@ -145,12 +141,13 @@ class PathPlanningWithLidar(gym.Env):
 
 
     def step(self, action=1):
-        """ Args:
-                action (int) 1: forward, -1: backward
-        """
+        # """ Args:
+        #         action (int) 1: forward, -1: backward
+        # """
+        self.__path_index += action
         if self.__path_index == 0:
             return False, (self.lidar.x, self.lidar.y, self.lidar.scan()[0])
-        self.__path_index += action
+        
         if not self.path or self.__path_index < 0 or self.__path_index >= len(self.path):
             return True, (self.lidar.x, self.lidar.y, self.lidar.scan()[0])  # done_state, observation
         self.lidar.x, self.lidar.y = self.path[self.__path_index]
@@ -164,52 +161,39 @@ class PathPlanningWithLidar(gym.Env):
             plt.ion()
             # ax config
             self.fig, self.ax = plt.subplots(figsize=(10, 10))
-            # self.ax.set_aspect('equal')
-            # self.ax.set_xticks([])
-            # self.ax.set_yticks([])
-            # self.ax.set_title('Path Planning')
+            self.ax.set_title('Path Planning')
 
-            # self.ax.set_xlim(self.map.size[0][0], self.map.size[1][0])
-            self.ax.set_xlim(-10, 10)
-            self.ax.set_ylim(-10, 10)
-            # self.ax.set_ylim(self.map.size[0][1], self.map.size[1][1])
-
-
-            self.robot, = self.ax.plot([], [], 'ro', markersize=10)
-
-            # 画出终点
-            self.ax.plot(self.map.end[0], self.map.end[1], 'go', markersize=10, label='Goal')
+            self.ax.set_xlim(self.map.size[0][0], self.map.size[1][0])
+            self.ax.set_ylim(self.map.size[0][1], self.map.size[1][1])
+            self.car, = self.ax.plot([], [], 'ro', markersize=10)
+            self.ray1, = self.ax.plot([], [], color='orange', linewidth=0.5, linestyle='--', label='Lidar Rays')
+            self.ray2, = self.ax.plot([], [], color='orange', linewidth=0.5, linestyle='--', label='Lidar Rays')
+            self.points = self.ax.scatter([], [], c='red', s=10, label='Lidar Hits')
+            
+            self.end = self.ax.plot(self.map.end[0], self.map.end[1], 'go', markersize=10, label='Goal')
+            self.start = self.ax.plot(self.map.start[0], self.map.start[1], 'bo', markersize=10, label='Start')
             if hasattr(self, "path") and self.path is not None and len(self.path) > 1:
                 path_arr = np.array(self.path)
                 self.ax.plot(path_arr[:, 0], path_arr[:, 1], color='blue', linewidth=2, label='RRT Path')
             # draw obstacles
             for obstacle in self.map.obstacles:
                 plot_polygon(obstacle, ax=self.ax, facecolor='lightblue', edgecolor='black', add_points=False)
-            plt.show()
 
         # show lidar points
         scan_distances, scan_points, ray_lines = self.lidar.scan()
-
-    
         if scan_points:
             scan_points = np.array(scan_points)
-            # 画出交点
-            self.ax.scatter(scan_points[:, 0], scan_points[:, 1], c='red', s=10, label='Lidar Hits')
+            self.points.set_offsets(scan_points)
         # 画出雷达射线
-        for ray_line in ray_lines:
-            x, y = ray_line.xy
-            self.ax.plot(x, y, color='orange', linewidth=0.5, linestyle='--', label='Lidar Rays')
+        self.ray1.set_data(ray_lines[0].xy)
+        self.ray2.set_data(ray_lines[1].xy)
+        self.car.set_data(self.lidar.x, self.lidar.y)
         
-        # 画出轨迹
-        self.__traj_index += 1
-        x, y = self.trajectory[self.__traj_index]
-        self.robot.set_data(x, y)
+        plt.pause(0.05)
         
-        
-        plt.pause(100)
-        plt.ioff()
 
     def close(self):
         if self.fig is not None:
+            plt.ioff()
             plt.close(self.fig)
             self.fig = None
